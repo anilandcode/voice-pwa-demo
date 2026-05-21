@@ -15,6 +15,19 @@ export interface RecorderResult {
   reset: () => void;
 }
 
+interface SpeechmaticsResult {
+  type: string;
+  start_time: number;
+  end_time: number;
+  alternatives?: Array<{ content: string; confidence?: number }>;
+}
+
+interface SpeechmaticsMsg {
+  message: string;
+  metadata?: { transcript?: string };
+  results?: SpeechmaticsResult[];
+}
+
 function floatToPCM16(float32: Float32Array): ArrayBuffer {
   const buf = new ArrayBuffer(float32.length * 2);
   const view = new DataView(buf);
@@ -39,6 +52,9 @@ export function useSpeechmaticsRecorder(): RecorderResult {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const transcriptRef = useRef("");
   const stoppingRef = useRef(false);
+  // Tracks the latest finalized end_time to skip overlapping results
+  // from Speechmatics' enhanced sliding-window model.
+  const lastEndTimeRef = useRef<number>(0);
 
   const cleanup = useCallback(() => {
     if (timerRef.current) {
@@ -91,6 +107,7 @@ export function useSpeechmaticsRecorder(): RecorderResult {
     setPartialTranscript("");
     setElapsed(0);
     transcriptRef.current = "";
+    lastEndTimeRef.current = 0;
     stoppingRef.current = false;
 
     let token: string;
@@ -99,7 +116,7 @@ export function useSpeechmaticsRecorder(): RecorderResult {
       const data = (await res.json()) as { token?: string; error?: string };
       if (!data.token) throw new Error(data.error ?? "no_token");
       token = data.token;
-    } catch (err) {
+    } catch {
       setError("Could not get transcription token. Check your Speechmatics key.");
       setState("error");
       return;
@@ -133,11 +150,7 @@ export function useSpeechmaticsRecorder(): RecorderResult {
     };
 
     ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data as string) as {
-        message: string;
-        metadata?: { transcript?: string };
-        results?: Array<{ alternatives?: Array<{ content: string }> }>;
-      };
+      const msg = JSON.parse(event.data as string) as SpeechmaticsMsg;
 
       if (msg.message === "RecognitionStarted") {
         setState("recording");
@@ -166,10 +179,46 @@ export function useSpeechmaticsRecorder(): RecorderResult {
         setPartialTranscript(msg.metadata.transcript);
       }
 
-      if (msg.message === "AddTranscript" && msg.metadata?.transcript) {
-        const chunk = msg.metadata.transcript;
-        transcriptRef.current += (transcriptRef.current ? " " : "") + chunk;
-        setTranscript(transcriptRef.current);
+      if (msg.message === "AddTranscript") {
+        const results = msg.results ?? [];
+
+        if (results.length > 0) {
+          // Filter out any results that overlap with already-finalized content.
+          // Speechmatics' enhanced model uses a sliding window — consecutive
+          // AddTranscript events share ~2 words of overlap.
+          const fresh = results.filter(
+            (r) => r.start_time >= lastEndTimeRef.current
+          );
+
+          if (fresh.length > 0) {
+            // Advance cursor to the end of this batch.
+            const batchEnd = Math.max(...fresh.map((r) => r.end_time));
+            lastEndTimeRef.current = batchEnd;
+
+            // Build text from word/punctuation tokens.
+            // Word tokens carry a leading space; punctuation tokens attach directly.
+            const newText = fresh
+              .map((r) => r.alternatives?.[0]?.content ?? "")
+              .join("")
+              .trim();
+
+            if (newText) {
+              transcriptRef.current +=
+                (transcriptRef.current ? " " : "") + newText;
+              setTranscript(transcriptRef.current);
+            }
+          }
+        } else if (msg.metadata?.transcript) {
+          // Fallback: no results array — append metadata text if it extends
+          // what we have (avoids doubling when results are absent).
+          const incoming = msg.metadata.transcript.trim();
+          if (incoming && !transcriptRef.current.endsWith(incoming)) {
+            transcriptRef.current +=
+              (transcriptRef.current ? " " : "") + incoming;
+            setTranscript(transcriptRef.current);
+          }
+        }
+
         setPartialTranscript("");
       }
 
@@ -207,6 +256,7 @@ export function useSpeechmaticsRecorder(): RecorderResult {
     setElapsed(0);
     setError(null);
     transcriptRef.current = "";
+    lastEndTimeRef.current = 0;
     stoppingRef.current = false;
   }, [cleanup]);
 
