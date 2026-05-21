@@ -10,11 +10,6 @@ The mood field must be exactly one of: neutral, positive, reflective, urgent.
 Tags must be exactly 3 short lowercase strings (1-2 words each).
 Do not include any text outside the JSON object.`;
 
-const client = new OpenAI({
-  apiKey: process.env.FEATHERLESS_API_KEY,
-  baseURL: process.env.FEATHERLESS_BASE_URL,
-});
-
 export async function POST(req: NextRequest) {
   const { transcript, audioDurationSec, recordedAt } = (await req.json()) as {
     transcript: string;
@@ -29,8 +24,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Instantiate inside the handler so the SDK never runs during `next build`
+  // (build-time env vars are not set; module-level instantiation throws).
+  const client = new OpenAI({
+    apiKey: process.env.VULTR_API_KEY,
+    baseURL: process.env.VULTR_INFERENCE_URL ?? "https://api.vultrinference.com/v1",
+  });
+
+  const model = process.env.VULTR_MODEL ?? "llama-3.1-70b-instruct-fp8";
+
   const completion = await client.chat.completions.create({
-    model: process.env.FEATHERLESS_MODEL!,
+    model,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       {
