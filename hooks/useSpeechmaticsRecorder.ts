@@ -28,6 +28,11 @@ interface SpeechmaticsMsg {
   results?: SpeechmaticsResult[];
 }
 
+interface Token {
+  content: string;
+  isPunct: boolean;
+}
+
 function floatToPCM16(float32: Float32Array): ArrayBuffer {
   const buf = new ArrayBuffer(float32.length * 2);
   const view = new DataView(buf);
@@ -36,6 +41,37 @@ function floatToPCM16(float32: Float32Array): ArrayBuffer {
     view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
   return buf;
+}
+
+/** Average-decimate from the device's native rate down to 16 kHz. */
+function downsample(input: Float32Array, fromRate: number, toRate: number): Float32Array {
+  if (fromRate <= toRate) return input;
+  const ratio = fromRate / toRate;
+  const outLen = Math.floor(input.length / ratio);
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const start = Math.floor(i * ratio);
+    const end = Math.min(Math.floor((i + 1) * ratio), input.length);
+    let sum = 0;
+    let count = 0;
+    for (let j = start; j < end; j++) {
+      sum += input[j];
+      count++;
+    }
+    out[i] = count ? sum / count : 0;
+  }
+  return out;
+}
+
+/** Rebuild the transcript from the dedup'd token map, sorted by start time. */
+function buildTranscript(map: Map<number, Token>): string {
+  const sorted = [...map.entries()].sort((a, b) => a[0] - b[0]);
+  let text = "";
+  for (const [, tok] of sorted) {
+    if (!tok.content) continue;
+    text += tok.isPunct ? tok.content : (text ? " " : "") + tok.content;
+  }
+  return text;
 }
 
 export function useSpeechmaticsRecorder(): RecorderResult {
@@ -50,11 +86,14 @@ export function useSpeechmaticsRecorder(): RecorderResult {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const finishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transcriptRef = useRef("");
+  // Dedup'd tokens keyed by start_time(ms). Overlapping AddTranscript events
+  // from the enhanced sliding-window model re-send the same start_time, which
+  // simply overwrites — no doubling.
+  const tokensRef = useRef<Map<number, Token>>(new Map());
   const stoppingRef = useRef(false);
-  // Tracks the latest finalized end_time to skip overlapping results
-  // from Speechmatics' enhanced sliding-window model.
-  const lastEndTimeRef = useRef<number>(0);
+  const finishedRef = useRef(false);
 
   const cleanup = useCallback(() => {
     if (timerRef.current) {
@@ -76,15 +115,25 @@ export function useSpeechmaticsRecorder(): RecorderResult {
   }, []);
 
   const stop = useCallback(() => {
-    if (stoppingRef.current) return;
+    if (stoppingRef.current || finishedRef.current) return;
     stoppingRef.current = true;
     setState("stopping");
 
-    cleanup();
+    cleanup(); // stop capturing/sending audio; keep WS open for final transcripts
 
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ message: "EndOfStream", last_seq_no: 0 }));
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ message: "EndOfStream", last_seq_no: 0 }));
+      // Fallback: if EndOfTranscript never arrives, finish anyway after 4s.
+      finishTimeoutRef.current = setTimeout(() => {
+        finishedRef.current = true;
+        try {
+          ws.close(1000);
+        } catch {}
+        setState("done");
+      }, 4000);
     } else {
+      finishedRef.current = true;
       setState("done");
     }
   }, [cleanup]);
@@ -96,6 +145,8 @@ export function useSpeechmaticsRecorder(): RecorderResult {
   }, [elapsed, state, stop]);
 
   const start = useCallback(async () => {
+    if (wsRef.current) return; // guard against double-start
+
     if (!navigator.onLine) {
       setError("Speechmatics needs a connection to transcribe. Reconnect and try again.");
       setState("error");
@@ -107,8 +158,9 @@ export function useSpeechmaticsRecorder(): RecorderResult {
     setPartialTranscript("");
     setElapsed(0);
     transcriptRef.current = "";
-    lastEndTimeRef.current = 0;
+    tokensRef.current.clear();
     stoppingRef.current = false;
+    finishedRef.current = false;
 
     let token: string;
     try {
@@ -154,21 +206,30 @@ export function useSpeechmaticsRecorder(): RecorderResult {
 
       if (msg.message === "RecognitionStarted") {
         setState("recording");
-        const audioCtx = new AudioContext({ sampleRate: 16000 });
+        // Use the device's native sample rate, then downsample manually —
+        // Safari ignores the AudioContext sampleRate hint.
+        const audioCtx = new AudioContext();
         audioCtxRef.current = audioCtx;
+        const inputRate = audioCtx.sampleRate;
 
         const source = audioCtx.createMediaStreamSource(stream);
-        const processor = audioCtx.createScriptProcessor(2048, 1, 1);
+        const processor = audioCtx.createScriptProcessor(4096, 1, 1);
         processorRef.current = processor;
 
         processor.onaudioprocess = (e) => {
           if (ws.readyState !== WebSocket.OPEN) return;
-          const pcm = floatToPCM16(e.inputBuffer.getChannelData(0));
-          ws.send(pcm);
+          const input = e.inputBuffer.getChannelData(0);
+          const ds = downsample(input, inputRate, 16000);
+          ws.send(floatToPCM16(ds));
         };
 
         source.connect(processor);
-        processor.connect(audioCtx.destination);
+        // Route to a muted gain node so the processor runs without echoing
+        // the mic back through the speakers.
+        const sink = audioCtx.createGain();
+        sink.gain.value = 0;
+        processor.connect(sink);
+        sink.connect(audioCtx.destination);
 
         timerRef.current = setInterval(() => {
           setElapsed((n) => n + 1);
@@ -180,75 +241,68 @@ export function useSpeechmaticsRecorder(): RecorderResult {
       }
 
       if (msg.message === "AddTranscript") {
-        const results = msg.results ?? [];
-
-        if (results.length > 0) {
-          // Filter out any results that overlap with already-finalized content.
-          // Speechmatics' enhanced model uses a sliding window — consecutive
-          // AddTranscript events share ~2 words of overlap.
-          const fresh = results.filter(
-            (r) => r.start_time >= lastEndTimeRef.current
-          );
-
-          if (fresh.length > 0) {
-            // Advance cursor to the end of this batch.
-            const batchEnd = Math.max(...fresh.map((r) => r.end_time));
-            lastEndTimeRef.current = batchEnd;
-
-            // Build text from word/punctuation tokens.
-            // Word tokens carry a leading space; punctuation tokens attach directly.
-            const newText = fresh
-              .map((r) => r.alternatives?.[0]?.content ?? "")
-              .join("")
-              .trim();
-
-            if (newText) {
-              transcriptRef.current +=
-                (transcriptRef.current ? " " : "") + newText;
-              setTranscript(transcriptRef.current);
-            }
-          }
-        } else if (msg.metadata?.transcript) {
-          // Fallback: no results array — append metadata text if it extends
-          // what we have (avoids doubling when results are absent).
-          const incoming = msg.metadata.transcript.trim();
-          if (incoming && !transcriptRef.current.endsWith(incoming)) {
-            transcriptRef.current +=
-              (transcriptRef.current ? " " : "") + incoming;
-            setTranscript(transcriptRef.current);
-          }
+        for (const r of msg.results ?? []) {
+          if (r.type !== "word" && r.type !== "punctuation") continue;
+          const content = r.alternatives?.[0]?.content ?? "";
+          tokensRef.current.set(Math.round(r.start_time * 1000), {
+            content,
+            isPunct: r.type === "punctuation",
+          });
         }
-
+        transcriptRef.current = buildTranscript(tokensRef.current);
+        setTranscript(transcriptRef.current);
         setPartialTranscript("");
       }
 
       if (msg.message === "EndOfTranscript") {
-        ws.close();
+        if (finishTimeoutRef.current) {
+          clearTimeout(finishTimeoutRef.current);
+          finishTimeoutRef.current = null;
+        }
+        finishedRef.current = true;
         setState("done");
-        stoppingRef.current = false;
+        try {
+          ws.close(1000);
+        } catch {}
       }
     };
 
     ws.onerror = () => {
       cleanup();
-      setError("WebSocket error. Please try again.");
-      setState("error");
-    };
-
-    ws.onclose = (ev) => {
-      cleanup();
-      if (!stoppingRef.current && state !== "done") {
-        if (ev.code !== 1000) {
-          setError("Connection closed unexpectedly.");
-          setState("error");
-        }
+      if (!finishedRef.current && !stoppingRef.current) {
+        setError("WebSocket error. Please try again.");
+        setState("error");
       }
     };
-  }, [cleanup, state]);
+
+    ws.onclose = () => {
+      cleanup();
+      wsRef.current = null;
+      if (finishTimeoutRef.current) {
+        clearTimeout(finishTimeoutRef.current);
+        finishTimeoutRef.current = null;
+      }
+      // Only a genuine unexpected close (not our own EndOfStream / EndOfTranscript).
+      if (!finishedRef.current && !stoppingRef.current) {
+        setError("Connection closed unexpectedly.");
+        setState("error");
+      } else if (stoppingRef.current && !finishedRef.current) {
+        // We asked to stop and the socket closed before EndOfTranscript — finish cleanly.
+        finishedRef.current = true;
+        setState("done");
+      }
+    };
+  }, [cleanup]);
 
   const reset = useCallback(() => {
     cleanup();
-    wsRef.current?.close();
+    if (finishTimeoutRef.current) {
+      clearTimeout(finishTimeoutRef.current);
+      finishTimeoutRef.current = null;
+    }
+    try {
+      wsRef.current?.close();
+    } catch {}
     wsRef.current = null;
     setState("idle");
     setTranscript("");
@@ -256,8 +310,9 @@ export function useSpeechmaticsRecorder(): RecorderResult {
     setElapsed(0);
     setError(null);
     transcriptRef.current = "";
-    lastEndTimeRef.current = 0;
+    tokensRef.current.clear();
     stoppingRef.current = false;
+    finishedRef.current = false;
   }, [cleanup]);
 
   return { state, transcript, partialTranscript, elapsed, error, start, stop, reset };
