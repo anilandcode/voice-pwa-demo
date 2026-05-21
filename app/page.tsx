@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import MicButton from "@/components/MicButton";
-import LiveTranscript from "@/components/LiveTranscript";
+import Hero from "@/components/Hero";
+import FeatureBento from "@/components/FeatureBento";
 import InstallBanner from "@/components/InstallBanner";
 import EntryCard from "@/components/EntryCard";
 import { useSpeechmaticsRecorder } from "@/hooks/useSpeechmaticsRecorder";
@@ -96,63 +96,26 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="mx-auto max-w-lg px-4 pb-24 pt-10">
-      <InstallBanner />
+    <main className="relative mx-auto max-w-2xl px-0 pb-16">
+      <div className="px-5 pt-5">
+        <InstallBanner />
+      </div>
 
-      <section className="mt-8 mb-10">
-        <p className="text-xs uppercase tracking-widest font-mono text-[var(--color-muted)] mb-2">
-          VOICE PWA
-        </p>
-        <h1 className="text-3xl font-bold tracking-tight leading-tight">
-          Speak it. Capture it.{" "}
-          <span style={{ color: "var(--color-accent)" }}>Forget it.</span>
-        </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
-          Your hands-free journal.
-        </p>
-      </section>
-
-      <section className="flex flex-col items-center gap-8 mb-10">
-        {(recorder.state === "recording" || recorder.state === "stopping") && (
-          <LiveTranscript
-            transcript={recorder.transcript}
-            partialTranscript={recorder.partialTranscript}
-          />
-        )}
-
-        <MicButton
-          state={processing ? "stopping" : recorder.state}
-          elapsed={recorder.elapsed}
-          onStart={recorder.start}
-          onStop={recorder.stop}
-        />
-
-        {recorder.error && (
-          <div className="w-full rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-            {recorder.error}
-          </div>
-        )}
-
-        {processing && (
-          <p className="text-sm animate-pulse" style={{ color: "var(--color-muted)" }}>
-            Summarising your note…
-          </p>
-        )}
-
-        {recorder.state === "idle" && !processing && (
-          <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-            Tap to start recording (up to 60s)
-          </p>
-        )}
-      </section>
+      <Hero
+        state={recorder.state}
+        elapsed={recorder.elapsed}
+        processing={processing}
+        transcript={recorder.transcript}
+        partialTranscript={recorder.partialTranscript}
+        error={recorder.error}
+        onStart={recorder.start}
+        onStop={recorder.stop}
+      />
 
       {latestEntry && (
-        <section className="mb-8">
-          <p
-            className="text-xs uppercase tracking-widest font-mono mb-3"
-            style={{ color: "var(--color-muted)" }}
-          >
-            LATEST ENTRY
+        <section className="mt-12 px-5">
+          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted)]">
+            Latest entry
           </p>
           <EntryCard
             entry={latestEntry}
@@ -162,25 +125,35 @@ export default function Home() {
               setLatestEntry(entries[0] ?? null);
             }}
           />
+          <div className="mt-5 text-center">
+            <Link
+              href="/entries"
+              className="inline-block rounded-full px-6 py-2.5 text-sm font-medium text-[var(--color-ink)] glass transition-transform active:scale-95"
+            >
+              View all entries
+            </Link>
+          </div>
         </section>
       )}
 
-      <div className="text-center">
-        <Link
-          href="/entries"
-          className="inline-block rounded-full border-2 px-6 py-2.5 text-sm font-medium transition-colors"
-          style={{
-            borderColor: "var(--color-accent)",
-            color: "var(--color-accent)",
-          }}
-        >
-          View all entries
-        </Link>
-      </div>
+      <FeatureBento />
 
-      <nav className="mt-8 flex justify-center gap-6 text-xs" style={{ color: "var(--color-muted)" }}>
-        <Link href="/about" className="underline underline-offset-2">About</Link>
-      </nav>
+      <footer className="px-5 pb-10 text-center">
+        <p className="font-serif text-2xl tracking-tight text-[var(--color-ink)]">
+          Ready when you are.
+        </p>
+        <p className="mx-auto mt-2 max-w-sm text-sm text-[var(--color-muted)]">
+          Built by Anil Pervaiz · Real-time ASR by Speechmatics · AI by Kimi K2.6
+        </p>
+        <nav className="mt-5 flex justify-center gap-6 text-sm text-[var(--color-ink)]/70">
+          <Link href="/entries" className="underline-offset-4 hover:underline">
+            Entries
+          </Link>
+          <Link href="/about" className="underline-offset-4 hover:underline">
+            About
+          </Link>
+        </nav>
+      </footer>
     </main>
   );
 }

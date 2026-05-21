@@ -38,34 +38,38 @@ export default function EntryCard({ entry, onDelete }: Props) {
 
   return (
     <div
-      className="relative overflow-hidden rounded-xl bg-white shadow-sm"
+      className="rise-in glass relative overflow-hidden rounded-3xl"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
       <div
-        className="absolute left-0 top-0 h-full w-1 rounded-l-xl"
+        className="absolute left-0 top-0 h-full w-1.5"
         style={{ background: MOOD_COLORS[entry.mood] }}
       />
 
-      <div className="pl-4 pr-4 py-4">
+      <div className="py-4 pl-5 pr-4">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-[var(--color-muted)] mb-1">{date}</p>
-            <p className="text-sm font-medium leading-snug line-clamp-2">{entry.summary}</p>
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 font-mono text-[11px] uppercase tracking-wide text-[var(--color-muted)]">
+              {date}
+            </p>
+            <p className="font-serif text-[17px] leading-snug text-[var(--color-ink)] line-clamp-2">
+              {entry.summary}
+            </p>
           </div>
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="shrink-0 text-[var(--color-muted)] text-xs px-2 py-1 rounded-lg hover:bg-neutral-100"
+            className="shrink-0 rounded-full px-3 py-1 text-xs text-[var(--color-muted)] transition-colors hover:bg-white/60"
           >
             {expanded ? "Less" : "More"}
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-1.5 mt-2">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {entry.tags.map((tag) => (
             <span
               key={tag}
-              className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-600"
+              className="rounded-full bg-white/70 px-2.5 py-0.5 text-xs text-[var(--color-ink)]/70 shadow-sm"
             >
               {tag}
             </span>
@@ -73,24 +77,24 @@ export default function EntryCard({ entry, onDelete }: Props) {
         </div>
 
         {expanded && (
-          <div className="mt-3 border-t border-neutral-100 pt-3 text-xs text-neutral-600 leading-relaxed">
+          <div className="mt-3 border-t border-white/50 pt-3 text-[13px] leading-relaxed text-[var(--color-muted)]">
             {entry.transcript}
           </div>
         )}
       </div>
 
       {confirming && (
-        <div className="absolute inset-0 flex items-center justify-center gap-3 bg-white/95 backdrop-blur-sm">
-          <p className="text-sm font-medium text-neutral-700">Delete this entry?</p>
+        <div className="absolute inset-0 flex items-center justify-center gap-3 bg-white/85 backdrop-blur-md">
+          <p className="text-sm font-medium text-[var(--color-ink)]">Delete this entry?</p>
           <button
             onClick={() => onDelete(entry.id)}
-            className="rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
+            className="rounded-xl bg-red-500 px-3 py-1.5 text-sm text-white"
           >
             Delete
           </button>
           <button
             onClick={() => setConfirming(false)}
-            className="rounded-lg bg-neutral-200 px-3 py-1.5 text-sm text-neutral-700"
+            className="rounded-xl bg-black/10 px-3 py-1.5 text-sm text-[var(--color-ink)]"
           >
             Cancel
           </button>

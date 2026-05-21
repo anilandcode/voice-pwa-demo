@@ -6,13 +6,19 @@ interface Props {
 }
 
 export default function LiveTranscript({ transcript, partialTranscript }: Props) {
-  if (!transcript && !partialTranscript) return null;
+  if (!transcript && !partialTranscript) {
+    return (
+      <div className="glass rounded-2xl px-4 py-3 text-sm text-[var(--color-muted)]">
+        …
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-[4rem] rounded-xl bg-white/70 backdrop-blur-sm px-4 py-3 text-sm leading-relaxed text-neutral-800 shadow-sm">
+    <div className="glass rounded-2xl px-4 py-3 text-left text-[15px] leading-relaxed text-[var(--color-ink)]">
       <span className="word-in">{transcript}</span>
       {partialTranscript && (
-        <span className="italic text-neutral-400"> {partialTranscript}</span>
+        <span className="italic text-[var(--color-muted)]"> {partialTranscript}</span>
       )}
     </div>
   );

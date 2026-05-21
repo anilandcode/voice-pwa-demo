@@ -23,10 +23,10 @@ export default function InstallBanner() {
   if (!prompt || dismissed) return null;
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm">
-      <span className="text-2xl">📱</span>
+    <div className="rise-in glass flex items-center gap-3 rounded-2xl px-4 py-3">
+      <span className="text-2xl">📲</span>
       <div className="flex-1 text-sm">
-        <p className="font-medium">Add to Home Screen</p>
+        <p className="font-semibold text-[var(--color-ink)]">Add to Home Screen</p>
         <p className="text-[var(--color-muted)]">One-tap journaling, works offline</p>
       </div>
       <button
@@ -36,13 +36,13 @@ export default function InstallBanner() {
           if (outcome === "accepted") setDismissed(true);
           setPrompt(null);
         }}
-        className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white active:opacity-80"
+        className="rounded-xl bg-[var(--color-accent)] px-3.5 py-1.5 text-sm font-medium text-white shadow-sm transition-transform active:scale-95"
       >
         Install
       </button>
       <button
         onClick={() => setDismissed(true)}
-        className="text-[var(--color-muted)] text-lg leading-none"
+        className="text-lg leading-none text-[var(--color-muted)]"
         aria-label="Dismiss"
       >
         ×
