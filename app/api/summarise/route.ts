@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     baseURL: process.env.VULTR_INFERENCE_URL ?? "https://api.vultrinference.com/v1",
   });
 
-  const model = process.env.VULTR_MODEL ?? "llama-3.1-70b-instruct-fp8";
+  const model = process.env.VULTR_MODEL ?? "moonshotai/Kimi-K2.6";
 
   const completion = await client.chat.completions.create({
     model,
