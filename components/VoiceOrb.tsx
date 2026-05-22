@@ -49,7 +49,7 @@ export default function VoiceOrb({
               width: size,
               height: size,
               background:
-                "radial-gradient(circle, rgba(255,90,60,0.5), transparent 70%)",
+                "radial-gradient(circle, rgba(47,107,255,0.5), transparent 70%)",
             }}
           />
           <span
@@ -59,7 +59,7 @@ export default function VoiceOrb({
               height: size,
               animationDelay: "0.9s",
               background:
-                "radial-gradient(circle, rgba(124,92,255,0.4), transparent 70%)",
+                "radial-gradient(circle, rgba(106,208,255,0.45), transparent 70%)",
             }}
           />
         </>
@@ -79,7 +79,7 @@ export default function VoiceOrb({
             cy={ringSize / 2}
             r={radius}
             fill="none"
-            stroke="rgba(255,255,255,0.45)"
+            stroke="var(--color-border)"
             strokeWidth={stroke}
           />
           <circle
@@ -101,7 +101,7 @@ export default function VoiceOrb({
         onClick={handleClick}
         disabled={isBusy}
         aria-label={isRecording ? "Stop recording" : "Start recording"}
-        className={`group relative overflow-hidden rounded-full shadow-[0_20px_60px_-12px_rgba(124,92,255,0.55)] outline-none transition-transform duration-300 active:scale-95 focus-visible:ring-4 focus-visible:ring-white/60 ${
+        className={`group relative overflow-hidden rounded-full shadow-[0_20px_60px_-12px_rgba(47,107,255,0.6)] outline-none transition-transform duration-300 active:scale-95 focus-visible:ring-4 focus-visible:ring-[var(--color-accent-soft)] ${
           isRecording ? "orb-recording" : "orb-breathe"
         }`}
         style={{ width: size, height: size }}
@@ -111,7 +111,7 @@ export default function VoiceOrb({
           className="orb-swirl absolute inset-[-15%]"
           style={{
             background:
-              "conic-gradient(from 0deg, #ff5a3c, #e0408a, #7c5cff, #5ca8ff, #ff5a3c)",
+              "conic-gradient(from 0deg, #2f6bff, #4f86ff, #6ad0ff, #8ab4ff, #2f6bff)",
             filter: "blur(2px)",
           }}
         />

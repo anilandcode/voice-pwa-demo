@@ -1,159 +1,125 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import Hero from "@/components/Hero";
-import FeatureBento from "@/components/FeatureBento";
 import InstallBanner from "@/components/InstallBanner";
 import EntryCard from "@/components/EntryCard";
-import { useSpeechmaticsRecorder } from "@/hooks/useSpeechmaticsRecorder";
-import { saveEntry, getAllEntries, deleteEntry, type JournalEntry } from "@/lib/db";
+import { getAllEntries, deleteEntry, type JournalEntry } from "@/lib/db";
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 export default function Home() {
-  const recorder = useSpeechmaticsRecorder();
-  const [latestEntry, setLatestEntry] = useState<JournalEntry | null>(null);
-  const [processing, setProcessing] = useState(false);
-  const [doneFired, setDoneFired] = useState(false);
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
-  const handleDone = useCallback(async () => {
-    const { transcript, elapsed } = recorder;
-
-    setProcessing(true);
-    const recordedAt = new Date().toISOString();
-
-    try {
-      const res = await fetch("/api/summarise", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript: transcript || "",
-          audioDurationSec: elapsed,
-          recordedAt,
-        }),
-      });
-
-      const data = (await res.json()) as {
-        summary: string;
-        tags: string[];
-        mood: JournalEntry["mood"];
-      };
-
-      const entry: JournalEntry = {
-        id: crypto.randomUUID(),
-        transcript: transcript || "",
-        summary: data.summary,
-        tags: Array.isArray(data.tags) ? data.tags : [],
-        mood: data.mood ?? "neutral",
-        audioDurationSec: elapsed,
-        recordedAt,
-        status: "complete",
-        createdAt: Date.now(),
-      };
-
-      await saveEntry(entry);
-      setLatestEntry(entry);
-    } catch {
-      const pendingEntry: JournalEntry = {
-        id: crypto.randomUUID(),
-        transcript: transcript || "",
-        summary: "Summary pending (offline)",
-        tags: ["pending"],
-        mood: "neutral",
-        audioDurationSec: elapsed,
-        recordedAt,
-        status: "pending",
-        createdAt: Date.now(),
-      };
-      await saveEntry(pendingEntry);
-      setLatestEntry(pendingEntry);
-
-      if ("serviceWorker" in navigator && "SyncManager" in window) {
-        const reg = await navigator.serviceWorker.ready;
-        await (
-          reg as ServiceWorkerRegistration & {
-            sync: { register: (tag: string) => Promise<void> };
-          }
-        ).sync.register("pending-entries");
-      }
-    } finally {
-      setProcessing(false);
-      recorder.reset();
-      setDoneFired(false);
-    }
-  }, [recorder]);
+  const load = async () => {
+    setEntries(await getAllEntries());
+    setLoaded(true);
+  };
 
   useEffect(() => {
-    if (recorder.state === "done" && !doneFired && !processing) {
-      setDoneFired(true);
-      handleDone();
-    }
-  }, [recorder.state, doneFired, processing, handleDone]);
-
-  useEffect(() => {
-    getAllEntries().then((entries) => {
-      if (entries.length > 0) setLatestEntry(entries[0]);
-    });
+    load();
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, []);
 
+  const recent = entries.slice(0, 3);
+
   return (
-    <main className="relative mx-auto max-w-2xl px-0 pb-16">
-      <div className="px-5 pt-5">
-        <InstallBanner />
+    <main className="mx-auto max-w-md px-5 pb-32 pt-8">
+      {/* header */}
+      <div className="mb-1 flex items-center gap-2">
+        <span className="text-xl">🎙️</span>
+        <p className="text-sm font-medium text-[var(--color-muted)]">
+          {greeting()} — talk it out.
+        </p>
+      </div>
+      <h1 className="mb-6 text-[2.4rem] font-extrabold leading-[1.05] tracking-tight text-[var(--color-ink)]">
+        Speak your mind,
+        <br />
+        keep the gist.
+      </h1>
+
+      <InstallBanner />
+
+      {/* primary CTA card → record */}
+      <Link
+        href="/record"
+        className="rise-in mt-5 flex items-center gap-4 rounded-3xl p-5 text-white shadow-[0_14px_40px_-12px_rgba(47,107,255,0.7)] transition-transform active:scale-[0.99]"
+        style={{ background: "linear-gradient(120deg, #2f6bff, #5b8cff)" }}
+      >
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20">
+          <svg viewBox="0 0 24 24" fill="white" className="h-6 w-6">
+            <path d="M12 1a4 4 0 014 4v6a4 4 0 01-8 0V5a4 4 0 014-4z" />
+            <path d="M19 11a7 7 0 01-14 0H3a9 9 0 008 8.94V23h2v-3.06A9 9 0 0021 11h-2z" />
+          </svg>
+        </span>
+        <div className="flex-1">
+          <p className="text-[17px] font-semibold">New voice note</p>
+          <p className="text-sm text-white/80">Tap to record up to 60 seconds</p>
+        </div>
+        <svg viewBox="0 0 24 24" className="h-5 w-5 text-white/80" fill="none" stroke="currentColor" strokeWidth="2.2">
+          <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </Link>
+
+      {/* recent entries */}
+      <div className="mt-9 flex items-center justify-between">
+        <h2 className="text-lg font-bold tracking-tight text-[var(--color-ink)]">
+          Recent notes
+        </h2>
+        {entries.length > 0 && (
+          <Link
+            href="/entries"
+            className="text-sm font-medium text-[var(--color-accent)]"
+          >
+            See all
+          </Link>
+        )}
       </div>
 
-      <Hero
-        state={recorder.state}
-        elapsed={recorder.elapsed}
-        processing={processing}
-        transcript={recorder.transcript}
-        partialTranscript={recorder.partialTranscript}
-        error={recorder.error}
-        onStart={recorder.start}
-        onStop={recorder.stop}
-      />
-
-      {latestEntry && (
-        <section className="mt-12 px-5">
-          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted)]">
-            Latest entry
-          </p>
-          <EntryCard
-            entry={latestEntry}
-            onDelete={async (id) => {
-              await deleteEntry(id);
-              const entries = await getAllEntries();
-              setLatestEntry(entries[0] ?? null);
-            }}
-          />
-          <div className="mt-5 text-center">
-            <Link
-              href="/entries"
-              className="inline-block rounded-full px-6 py-2.5 text-sm font-medium text-[var(--color-ink)] glass transition-transform active:scale-95"
-            >
-              View all entries
-            </Link>
+      <div className="mt-4 space-y-4">
+        {!loaded ? (
+          [1, 2].map((i) => (
+            <div key={i} className="card h-24 animate-pulse rounded-3xl" />
+          ))
+        ) : recent.length === 0 ? (
+          <div className="card flex flex-col items-center gap-3 rounded-3xl py-12 text-center">
+            <span className="text-4xl">📝</span>
+            <p className="max-w-[16rem] text-sm text-[var(--color-muted)]">
+              No notes yet. Tap{" "}
+              <span className="font-medium text-[var(--color-ink)]">
+                New voice note
+              </span>{" "}
+              to capture your first thought.
+            </p>
           </div>
-        </section>
-      )}
+        ) : (
+          recent.map((entry) => (
+            <EntryCard
+              key={entry.id}
+              entry={entry}
+              onDelete={async (id) => {
+                await deleteEntry(id);
+                load();
+              }}
+            />
+          ))
+        )}
+      </div>
 
-      <FeatureBento />
-
-      <footer className="px-5 pb-10 text-center">
-        <p className="font-serif text-2xl tracking-tight text-[var(--color-ink)]">
-          Ready when you are.
-        </p>
-        <p className="mx-auto mt-2 max-w-sm text-sm text-[var(--color-muted)]">
-          Built by Anil Pervaiz · Real-time ASR by Speechmatics · AI by Kimi K2.6
-        </p>
-        <nav className="mt-5 flex justify-center gap-6 text-sm text-[var(--color-ink)]/70">
-          <Link href="/entries" className="underline-offset-4 hover:underline">
-            Entries
-          </Link>
-          <Link href="/about" className="underline-offset-4 hover:underline">
-            About
-          </Link>
-        </nav>
-      </footer>
+      <p className="mt-10 text-center text-xs text-[var(--color-muted)]">
+        Real-time ASR by Speechmatics · AI by Kimi K2.6 ·{" "}
+        <Link href="/about" className="underline underline-offset-2">
+          About
+        </Link>
+      </p>
     </main>
   );
 }

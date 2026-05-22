@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Fraunces } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import RegisterSW from "@/components/RegisterSW";
-import GradientBackground from "@/components/GradientBackground";
+import SheenBackground from "@/components/SheenBackground";
+import BottomTabBar from "@/components/BottomTabBar";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
-  subsets: ["latin"],
-  axes: ["opsz"],
-});
 
 export const metadata: Metadata = {
   title: "Voice PWA — Hands-free journal by Anil Pervaiz",
@@ -27,16 +23,17 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full`}
     >
       <head>
         <link rel="apple-touch-icon" href="/icons/180.png" />
-        <meta name="theme-color" content="#ff5a3c" />
+        <meta name="theme-color" content="#ffffff" />
       </head>
       <body className="min-h-full font-sans antialiased">
-        <GradientBackground />
+        <SheenBackground />
         <RegisterSW />
         {children}
+        <BottomTabBar />
       </body>
     </html>
   );

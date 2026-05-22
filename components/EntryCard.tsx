@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useRef } from "react";
+import Link from "next/link";
 import type { JournalEntry } from "@/lib/db";
 
-const MOOD_COLORS: Record<JournalEntry["mood"], string> = {
-  neutral: "#6b7280",
-  positive: "#22c55e",
-  reflective: "#3b82f6",
-  urgent: "#ef4444",
+const MOOD: Record<JournalEntry["mood"], { color: string; emoji: string }> = {
+  neutral: { color: "#8a8a96", emoji: "😐" },
+  positive: { color: "#22c55e", emoji: "😊" },
+  reflective: { color: "#2f6bff", emoji: "🪞" },
+  urgent: { color: "#ef4444", emoji: "🔥" },
 };
 
 interface Props {
@@ -16,13 +17,14 @@ interface Props {
 }
 
 export default function EntryCard({ entry, onDelete }: Props) {
-  const [expanded, setExpanded] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const touchStartX = useRef<number | null>(null);
+  const mood = MOOD[entry.mood] ?? MOOD.neutral;
 
   const date = new Date(entry.recordedAt).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -32,74 +34,50 @@ export default function EntryCard({ entry, onDelete }: Props) {
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (touchStartX.current === null) return;
     const delta = touchStartX.current - e.changedTouches[0].clientX;
-    if (delta > 80) setConfirming(true);
+    if (delta > 90) {
+      if (confirm("Delete this note?")) onDelete(entry.id);
+    }
     touchStartX.current = null;
   };
 
   return (
-    <div
-      className="rise-in glass relative overflow-hidden rounded-3xl"
+    <Link
+      href={`/entries/${entry.id}`}
+      className="rise-in card block rounded-3xl p-4 transition-transform active:scale-[0.99]"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div
-        className="absolute left-0 top-0 h-full w-1.5"
-        style={{ background: MOOD_COLORS[entry.mood] }}
-      />
-
-      <div className="py-4 pl-5 pr-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="mb-1 font-mono text-[11px] uppercase tracking-wide text-[var(--color-muted)]">
+      <div className="flex items-start gap-3">
+        <span
+          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base"
+          style={{ background: `${mood.color}1a` }}
+        >
+          {mood.emoji}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-mono text-[11px] uppercase tracking-wide text-[var(--color-muted)]">
               {date}
             </p>
-            <p className="font-serif text-[17px] leading-snug text-[var(--color-ink)] line-clamp-2">
-              {entry.summary}
-            </p>
-          </div>
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            className="shrink-0 rounded-full px-3 py-1 text-xs text-[var(--color-muted)] transition-colors hover:bg-white/60"
-          >
-            {expanded ? "Less" : "More"}
-          </button>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {entry.tags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full bg-white/70 px-2.5 py-0.5 text-xs text-[var(--color-ink)]/70 shadow-sm"
-            >
-              {tag}
+            <span className="font-mono text-[11px] text-[var(--color-muted)]">
+              {entry.audioDurationSec}s
             </span>
-          ))}
-        </div>
-
-        {expanded && (
-          <div className="mt-3 border-t border-white/50 pt-3 text-[13px] leading-relaxed text-[var(--color-muted)]">
-            {entry.transcript}
           </div>
-        )}
-      </div>
-
-      {confirming && (
-        <div className="absolute inset-0 flex items-center justify-center gap-3 bg-white/85 backdrop-blur-md">
-          <p className="text-sm font-medium text-[var(--color-ink)]">Delete this entry?</p>
-          <button
-            onClick={() => onDelete(entry.id)}
-            className="rounded-xl bg-red-500 px-3 py-1.5 text-sm text-white"
-          >
-            Delete
-          </button>
-          <button
-            onClick={() => setConfirming(false)}
-            className="rounded-xl bg-black/10 px-3 py-1.5 text-sm text-[var(--color-ink)]"
-          >
-            Cancel
-          </button>
+          <p className="mt-1 text-[15px] font-medium leading-snug text-[var(--color-ink)] line-clamp-2">
+            {entry.summary}
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {entry.tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full bg-[var(--color-accent-soft)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-accent)]"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
         </div>
-      )}
-    </div>
+      </div>
+    </Link>
   );
 }

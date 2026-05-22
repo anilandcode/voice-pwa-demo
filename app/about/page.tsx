@@ -2,15 +2,13 @@ import Link from "next/link";
 
 export default function AboutPage() {
   return (
-    <main className="mx-auto max-w-lg px-5 pb-24 pt-12">
-      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted)]">
-        About
-      </p>
-      <h1 className="mb-7 font-serif text-4xl tracking-tight text-[var(--color-ink)]">
+    <main className="mx-auto max-w-md px-5 pb-32 pt-10">
+      <p className="mb-2 text-sm font-medium text-[var(--color-muted)]">About</p>
+      <h1 className="mb-7 text-[2.4rem] font-extrabold tracking-tight text-[var(--color-ink)]">
         Voice PWA
       </h1>
 
-      <div className="glass space-y-4 rounded-3xl p-6 text-[15px] leading-relaxed text-[var(--color-ink)]/80">
+      <div className="card space-y-4 rounded-3xl p-6 text-[15px] leading-relaxed text-[var(--color-ink)]/80">
         <p>
           Built by{" "}
           <a
@@ -42,7 +40,7 @@ export default function AboutPage() {
           href="https://anilpervaiz.com/contact"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-block rounded-full bg-[var(--color-accent)] px-6 py-3 text-sm font-medium text-white shadow-[0_12px_30px_-8px_rgba(255,90,60,0.6)] transition-transform active:scale-95"
+          className="inline-block rounded-full bg-[var(--color-accent)] px-6 py-3 text-sm font-medium text-white shadow-[0_12px_30px_-8px_rgba(47,107,255,0.6)] transition-transform active:scale-95"
         >
           Want a custom voice AI for your team? Brief me
         </Link>

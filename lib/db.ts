@@ -47,6 +47,10 @@ export async function deleteEntry(id: string) {
   return (await getDB()).delete("entries", id);
 }
 
+export async function getEntry(id: string): Promise<JournalEntry | undefined> {
+  return (await getDB()).get("entries", id);
+}
+
 export async function getPendingEntries(): Promise<JournalEntry[]> {
   const all = await getAllEntries();
   return all.filter((e) => e.status === "pending");
